@@ -2,33 +2,46 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { getLatestTransactions } from "@/lib/rpc";
+import { CardSkeleton } from "./LoadingSkeleton";
 
 interface Transaction {
   hash: string;
-  message: string;
-  timestamp: Date;
+  from: string;
+  to: string;
+  value: string;
+  timestamp: number;
 }
 
 export default function LiveActivityFeed() {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    return Array.from({ length: 10 }, () => ({
-      hash: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random().toString(16).substr(2, 4)}`,
-      message: ["GM ☀️", "Good morning ARC!", "Building on testnet", "Hello Web3"][Math.floor(Math.random() * 4)],
-      timestamp: new Date(Date.now() - Math.random() * 3600000), // last hour
-    }));
-  });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Add new transactions periodically
-    const interval = setInterval(() => {
-      const newTxn: Transaction = {
-        hash: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random().toString(16).substr(2, 4)}`,
-        message: ["GM ☀️", "Good morning ARC!", "Building on testnet", "Hello Web3"][Math.floor(Math.random() * 4)],
-        timestamp: new Date(),
-      };
-      setTransactions(prev => [newTxn, ...prev.slice(0, 9)]);
-    }, 10000);
+    const fetchTransactions = async () => {
+      try {
+        const txs = await getLatestTransactions(10);
+        setTransactions(
+          txs.map((tx) => ({
+            hash: tx.hash,
+            from: tx.from?.slice(0, 6) + "..." + tx.from?.slice(-4),
+            to:
+              typeof tx.to === "string"
+                ? tx.to.slice(0, 6) + "..." + tx.to.slice(-4)
+                : "Contract",
+            value: parseFloat(tx.value).toFixed(4),
+            timestamp: tx.timestamp,
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchTransactions();
+    const interval = setInterval(fetchTransactions, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -49,23 +62,35 @@ export default function LiveActivityFeed() {
         </div>
 
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {transactions.map((txn, index) => (
-            <motion.div
-              key={`${txn.hash}-${txn.timestamp.getTime()}`}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              className="flex items-center justify-between rounded-lg bg-slate-900/50 p-3 font-mono text-sm"
-            >
-              <div className="flex-1">
-                <div className="text-cyan-400 truncate">{txn.hash}</div>
-                <div className="text-slate-300">{txn.message}</div>
-              </div>
-              <div className="text-xs text-slate-500 ml-4">
-                {txn.timestamp.toLocaleTimeString()}
-              </div>
-            </motion.div>
-          ))}
+          {loading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="h-16 rounded-lg bg-white/5 border border-white/10"
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+              ))
+            : transactions.map((txn, index) => (
+                <motion.div
+                  key={`${txn.hash}-${index}`}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="flex items-center justify-between rounded-lg bg-slate-900/50 p-3 font-mono text-sm hover:bg-slate-800/50 transition"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-cyan-400 truncate">{txn.hash}</div>
+                    <div className="text-slate-300 text-xs">
+                      {txn.from} → {txn.to}
+                    </div>
+                  </div>
+                  <div className="text-right ml-4 flex-shrink-0">
+                    <div className="text-green-400 text-sm font-semibold">{txn.value}</div>
+                    <div className="text-xs text-slate-500">USDC</div>
+                  </div>
+                </motion.div>
+              ))}
         </div>
       </div>
     </motion.section>

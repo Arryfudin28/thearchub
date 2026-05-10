@@ -1,8 +1,41 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useAccount } from 'wagmi';
+import { useState, useEffect } from 'react';
+import { getBalance } from '@/lib/rpc';
+import { CardSkeleton } from './LoadingSkeleton';
 
 export default function WalletSummaryCard() {
+  const { address, isConnected } = useAccount();
+  const [balance, setBalance] = useState<string>('0');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!address) return;
+      setLoading(true);
+      try {
+        const bal = await getBalance(address);
+        setBalance(parseFloat(bal).toFixed(4));
+      } catch (error) {
+        console.error('Error fetching balance:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBalance();
+  }, [address]);
+
+  if (loading) {
+    return (
+      <div className="mb-8">
+        <CardSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className="mb-8">
       <motion.div
@@ -18,8 +51,19 @@ export default function WalletSummaryCard() {
             </span>
           </div>
         </div>
-        <div className="text-4xl font-bold text-white">$12,345.67</div>
-        <div className="text-sm text-gray-400">Total Balance</div>
+        {isConnected ? (
+          <>
+            <div className="text-4xl font-bold text-white font-mono">{balance} USDC</div>
+            <div className="text-sm text-gray-400">
+              Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-2xl font-bold text-slate-400">—</div>
+            <div className="text-sm text-gray-500">Connect wallet to view balance</div>
+          </>
+        )}
       </motion.div>
     </div>
   );

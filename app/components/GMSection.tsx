@@ -2,22 +2,42 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { useAccount } from "wagmi";
+import { useAccount, useSendTransaction } from "wagmi";
+import { parseEther } from "viem";
 
 export default function GMSection() {
   const { isConnected, address } = useAccount();
+  const { sendTransaction, isPending } = useSendTransaction();
   const [message, setMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const [transactionHash, setTransactionHash] = useState<string | null>(null);
 
   const handleSendGM = async () => {
-    if (!isConnected || !message.trim()) return;
+    if (!isConnected || !message.trim() || !address) return;
 
-    setIsSending(true);
-    // Simulate sending GM
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsSending(false);
-    setMessage("");
-    // In real app, send transaction here
+    try {
+      // Send a minimal transaction (0 value) with GM message in data
+      const messageHex = `0x${Buffer.from(message).toString("hex")}` as `0x${string}`;
+      
+      sendTransaction(
+        {
+          to: address as `0x${string}`, // Send to self
+          value: parseEther("0"),
+          data: messageHex.length > 66 ? (messageHex.slice(0, 66) as `0x${string}`) : messageHex,
+        },
+        {
+          onSuccess: (hash) => {
+            setTransactionHash(hash);
+            setMessage("");
+            setTimeout(() => setTransactionHash(null), 5000);
+          },
+          onError: (error) => {
+            console.error("Transaction failed:", error);
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Error sending GM:", error);
+    }
   };
 
   return (
@@ -56,18 +76,33 @@ export default function GMSection() {
                 <input
                   type="text"
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(e) => setMessage(e.target.value.slice(0, 20))} // Max 20 chars for TX data
                   placeholder="GM ☀️"
                   className="w-full rounded-lg border border-white/10 bg-slate-900/50 p-3 font-mono text-white placeholder-slate-500 focus:border-cyan-400/50 focus:outline-none"
                 />
+                <p className="text-xs text-slate-500">{message.length}/20 characters</p>
               </div>
+
+              {transactionHash && (
+                <div className="rounded-lg bg-green-950/30 border border-green-500/50 p-3">
+                  <p className="text-green-400 text-sm font-mono">✓ GM sent!</p>
+                  <p className="text-xs text-green-400/70 truncate">{transactionHash}</p>
+                </div>
+              )}
 
               <button
                 onClick={handleSendGM}
-                disabled={!message.trim() || isSending}
+                disabled={!message.trim() || isPending}
                 className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:shadow-lg transition-all"
               >
-                {isSending ? "Sending..." : "Send GM"}
+                {isPending ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Sending...
+                  </span>
+                ) : (
+                  "Send GM"
+                )}
               </button>
             </div>
           )}

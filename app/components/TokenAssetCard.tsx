@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 interface Token {
   name: string;
   symbol: string;
+  address: string;
+  decimals: number;
   balance: string;
 }
 
@@ -20,7 +22,8 @@ export default function TokenAssetCard({ token }: { token: Token }) {
           <div className="text-sm text-gray-400">{token.symbol}</div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-cyan-400">{token.balance}</div>
+          <div className="font-mono text-cyan-400 font-semibold">{token.balance}</div>
+          <div className="text-xs text-gray-500">{token.symbol}</div>
         </div>
       </div>
     </motion.div>
