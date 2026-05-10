@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 import { RainbowKitProvider, getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { WagmiConfig } from "wagmi";
+import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http } from "viem";
 
@@ -40,7 +40,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WagmiConfig config={wagmiConfig}>
+      <WagmiProvider config={wagmiConfig}>
         <RainbowKitProvider
           appInfo={{
             appName: "ARCHub",
@@ -51,7 +51,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         >
           {children}
         </RainbowKitProvider>
-      </WagmiConfig>
+      </WagmiProvider>
     </QueryClientProvider>
   );
 }

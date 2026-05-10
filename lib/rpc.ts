@@ -1,102 +1,107 @@
-import { ethers } from 'ethers';
+import { createPublicClient, http, formatEther, formatGwei } from 'viem';
+import { arcTestnet } from '@/app/components/Web3Provider';
 
-const RPC_URL = 'https://rpc.testnet.arc.network';
-
-export const getProvider = () => {
-  return new ethers.JsonRpcProvider(RPC_URL);
-};
+const client = createPublicClient({
+  chain: arcTestnet,
+  transport: http('https://rpc.testnet.arc.network'),
+});
 
 export async function getBlockHeight(): Promise<number> {
-  const provider = getProvider();
-  return provider.getBlockNumber();
+  return Number(await client.getBlockNumber());
 }
 
 export async function getGasPrice(): Promise<string> {
-  const provider = getProvider();
-  const feeData = await provider.getFeeData();
-  if (!feeData.gasPrice) return '0';
-  return ethers.formatUnits(feeData.gasPrice, 'gwei');
+  const gasPrice = await client.getGasPrice();
+  return formatGwei(gasPrice);
 }
 
 export async function getLatestTransactions(limit: number = 10) {
-  const provider = getProvider();
-  const blockNumber = await provider.getBlockNumber();
+  const blockNumber = await client.getBlockNumber();
   const transactions: any[] = [];
 
-  for (let i = 0; i < Math.min(limit, 10); i++) {
+  // Get transactions from the last 20 blocks
+  for (let i = 0; i < Math.min(20, Number(blockNumber)); i++) {
     try {
-      const block = await provider.getBlock(blockNumber - i);
-      if (block && block.transactions.length > 0) {
-        for (let j = 0; j < Math.min(block.transactions.length, 1); j++) {
-          const txHash = block.transactions[j];
-          const tx = await provider.getTransaction(txHash);
-          if (tx) {
-            transactions.push({
-              hash: tx.hash,
-              from: tx.from,
-              to: tx.to || 'Contract Creation',
-              value: tx.value ? ethers.formatUnits(tx.value, 18) : '0',
-              blockNumber: tx.blockNumber,
-              timestamp: block.timestamp,
-              gasPrice: tx.gasPrice ? ethers.formatUnits(tx.gasPrice, 'gwei') : '0',
-            });
-          }
+      const block = await client.getBlock({
+        blockNumber: blockNumber - BigInt(i),
+        includeTransactions: true,
+      });
+
+      if (block.transactions && block.transactions.length > 0) {
+        for (const tx of block.transactions) {
+          transactions.push({
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to || 'Contract Creation',
+            value: formatEther(tx.value),
+            blockNumber: tx.blockNumber,
+            timestamp: Number(block.timestamp),
+            gasPrice: formatGwei(tx.gasPrice || BigInt(0)),
+          });
+
           if (transactions.length >= limit) break;
         }
       }
+
+      if (transactions.length >= limit) break;
     } catch (error) {
-      console.error(`Error fetching block ${blockNumber - i}:`, error);
+      console.error(`Error fetching block ${blockNumber - BigInt(i)}:`, error);
     }
-    if (transactions.length >= limit) break;
   }
 
   return transactions;
 }
 
 export async function getNetworkStats() {
-  const provider = getProvider();
-  const blockNumber = await provider.getBlockNumber();
-  const block = await provider.getBlock(blockNumber);
-  const gasPrice = await getGasPrice();
+  const blockNumber = await client.getBlockNumber();
+  const block = await client.getBlock({ blockNumber });
+  const gasPrice = await client.getGasPrice();
 
   return {
-    blockHeight: blockNumber,
-    blockTime: block ? Math.floor(Date.now() / 1000) - block.timestamp : 0,
-    gasPrice: parseFloat(gasPrice),
+    blockHeight: Number(blockNumber),
+    blockTime: block ? Math.floor(Date.now() / 1000) - Number(block.timestamp) : 0,
+    gasPrice: parseFloat(formatGwei(gasPrice)),
     timestamp: Math.floor(Date.now() / 1000),
   };
 }
 
-export async function getBalance(address: string): Promise<string> {
-  const provider = getProvider();
+export async function getBalance(address: `0x${string}`): Promise<string> {
   try {
-    const balance = await provider.getBalance(address);
-    return ethers.formatUnits(balance, 18);
+    const balance = await client.getBalance({ address });
+    return formatEther(balance);
   } catch (error) {
     console.error('Error fetching balance:', error);
     return '0';
   }
 }
 
-export async function getUSDCBalance(address: string): Promise<string> {
-  const provider = getProvider();
-  const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-  const USDC_ABI = ['function balanceOf(address) public view returns (uint256)'];
+export async function getUSDCBalance(address: `0x${string}`): Promise<string> {
+  const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`;
+  const USDC_ABI = [
+    {
+      inputs: [{ name: 'account', type: 'address' }],
+      name: 'balanceOf',
+      outputs: [{ name: '', type: 'uint256' }],
+      stateMutability: 'view',
+      type: 'function',
+    },
+  ] as const;
 
   try {
-    const contract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
-    const balance = await contract.balanceOf(address);
-    return ethers.formatUnits(balance, 6);
+    const balance = await client.readContract({
+      address: USDC_ADDRESS,
+      abi: USDC_ABI,
+      functionName: 'balanceOf',
+      args: [address],
+    });
+    return (Number(balance) / 1e6).toFixed(2); // USDC has 6 decimals
   } catch (error) {
     console.error('Error fetching USDC balance:', error);
     return '0';
   }
 }
 
-export async function getTokenBalances(address: string) {
-  const provider = getProvider();
-  
-  // Mock token list - in production, fetch from API
+export async function getTokenBalances(address: `0x${string}`) {
   const tokens = [
     {
       name: 'ARC',
@@ -120,14 +125,27 @@ export async function getTokenBalances(address: string) {
 
       if (token.address === '0x0000000000000000000000000000000000000000') {
         // Native token (ARC)
-        const bal = await provider.getBalance(address);
-        balance = ethers.formatUnits(bal, token.decimals);
+        const bal = await client.getBalance({ address });
+        balance = formatEther(bal);
       } else {
         // ERC20 token
-        const ABI = ['function balanceOf(address) public view returns (uint256)'];
-        const contract = new ethers.Contract(token.address, ABI, provider);
-        const bal = await contract.balanceOf(address);
-        balance = ethers.formatUnits(bal, token.decimals);
+        const ABI = [
+          {
+            inputs: [{ name: 'account', type: 'address' }],
+            name: 'balanceOf',
+            outputs: [{ name: '', type: 'uint256' }],
+            stateMutability: 'view',
+            type: 'function',
+          },
+        ] as const;
+
+        const bal = await client.readContract({
+          address: token.address as `0x${string}`,
+          abi: ABI,
+          functionName: 'balanceOf',
+          args: [address],
+        });
+        balance = (Number(bal) / Math.pow(10, token.decimals)).toString();
       }
 
       balances.push({
@@ -140,4 +158,41 @@ export async function getTokenBalances(address: string) {
   }
 
   return balances;
+}
+
+export async function getVolumeData(blocks: number = 50) {
+  const blockNumber = await client.getBlockNumber();
+  const volumeData: { date: string; volume: number }[] = [];
+
+  for (let i = 0; i < blocks; i++) {
+    try {
+      const block = await client.getBlock({
+        blockNumber: blockNumber - BigInt(i),
+        includeTransactions: true,
+      });
+
+      if (block.transactions) {
+        const blockVolume = block.transactions.reduce((sum, tx) => {
+          return sum + parseFloat(formatEther(tx.value));
+        }, 0);
+
+        const date = new Date(Number(block.timestamp) * 1000);
+        const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+
+        const existingEntry = volumeData.find(d => d.date === dateKey);
+        if (existingEntry) {
+          existingEntry.volume += blockVolume;
+        } else {
+          volumeData.push({ date: dateKey, volume: blockVolume });
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching block ${blockNumber - BigInt(i)}:`, error);
+    }
+  }
+
+  // Sort by date and return last 30 days
+  return volumeData
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-30);
 }

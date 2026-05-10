@@ -24,7 +24,7 @@ export default function TokenAssetsList() {
       if (!address) return;
       setLoading(true);
       try {
-        const tokenList = await getTokenBalances(address);
+        const tokenList = await getTokenBalances(address as `0x${string}`);
         setTokens(tokenList);
       } catch (error) {
         console.error('Error fetching token balances:', error);

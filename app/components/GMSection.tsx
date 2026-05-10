@@ -15,20 +15,21 @@ export default function GMSection() {
     if (!isConnected || !message.trim() || !address) return;
 
     try {
-      // Send a minimal transaction (0 value) with GM message in data
+      // Use burn address (0x000...000) for 0-value transactions with data
+      const burnAddress = '0x0000000000000000000000000000000000000000' as `0x${string}`;
       const messageHex = `0x${Buffer.from(message).toString("hex")}` as `0x${string}`;
       
       sendTransaction(
         {
-          to: address as `0x${string}`, // Send to self
-          value: parseEther("0"),
+          to: burnAddress,
+          value: BigInt(0), // 0 USDC
           data: messageHex.length > 66 ? (messageHex.slice(0, 66) as `0x${string}`) : messageHex,
         },
         {
           onSuccess: (hash) => {
             setTransactionHash(hash);
             setMessage("");
-            setTimeout(() => setTransactionHash(null), 5000);
+            setTimeout(() => setTransactionHash(null), 10000);
           },
           onError: (error) => {
             console.error("Transaction failed:", error);
@@ -85,8 +86,15 @@ export default function GMSection() {
 
               {transactionHash && (
                 <div className="rounded-lg bg-green-950/30 border border-green-500/50 p-3">
-                  <p className="text-green-400 text-sm font-mono">✓ GM sent!</p>
-                  <p className="text-xs text-green-400/70 truncate">{transactionHash}</p>
+                  <p className="text-green-400 text-sm font-mono">✓ GM sent successfully!</p>
+                  <a
+                    href={`https://testnet.arcscan.app/tx/${transactionHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cyan-400 hover:text-cyan-300 text-xs underline font-mono break-all"
+                  >
+                    View on ArcScan ↗
+                  </a>
                 </div>
               )}
 

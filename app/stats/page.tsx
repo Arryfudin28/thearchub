@@ -1,4 +1,30 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { getVolumeData } from "@/lib/rpc";
+import { StatSkeleton } from "../components/LoadingSkeleton";
+
 export default function StatsPage() {
+  const [volumeData, setVolumeData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchVolumeData = async () => {
+      try {
+        const data = await getVolumeData(50);
+        setVolumeData(data);
+      } catch (error) {
+        console.error("Error fetching volume data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVolumeData();
+  }, []);
+
   const metrics = [
     {
       label: "Current TPS",
@@ -72,9 +98,53 @@ export default function StatsPage() {
             </div>
 
             <div className="mt-8 overflow-hidden rounded-[1.75rem] border border-cyan-400/10 bg-slate-900/70 p-8 shadow-[inset_0_0_70px_rgba(56,189,248,0.1)]">
-              <div className="h-[320px] rounded-[1.5rem] border border-dashed border-white/10 bg-slate-950/50" />
+              {loading ? (
+                <div className="h-[320px] flex items-center justify-center">
+                  <StatSkeleton />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={volumeData}>
+                    <defs>
+                      <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#9ca3af"
+                      fontSize={12}
+                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis
+                      stroke="#9ca3af"
+                      fontSize={12}
+                      tickFormatter={(value) => `${value.toFixed(2)} USDC`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #374151',
+                        borderRadius: '0.5rem',
+                        color: '#f1f5f9'
+                      }}
+                      labelFormatter={(value) => `Date: ${new Date(value).toLocaleDateString()}`}
+                      formatter={(value: any) => [`${(value || 0).toFixed(4)} USDC`, 'Volume']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="volume"
+                      stroke="#06b6d4"
+                      strokeWidth={2}
+                      fill="url(#volumeGradient)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
               <p className="mt-5 text-sm leading-7 text-slate-400">
-                Chart placeholder for 30-day transaction volume. Integrate your chart library here to visualize volume spikes, trends, and daily transaction flow.
+                Real-time transaction volume from the last 30 days on ARC Testnet. Data aggregated from blockchain blocks.
               </p>
             </div>
           </section>

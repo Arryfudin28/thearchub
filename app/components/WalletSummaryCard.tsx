@@ -16,7 +16,7 @@ export default function WalletSummaryCard() {
       if (!address) return;
       setLoading(true);
       try {
-        const bal = await getBalance(address);
+        const bal = await getBalance(address as `0x${string}`);
         setBalance(parseFloat(bal).toFixed(4));
       } catch (error) {
         console.error('Error fetching balance:', error);
